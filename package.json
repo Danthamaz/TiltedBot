@@ -1,0 +1,26 @@
+{
+  "name": "tilted-bot",
+  "version": "1.0.0",
+  "description": "Custom Discord bot for HunterOnTilt's gaming server",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "deploy-commands": "node src/deploy-commands.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "gaming"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "pdfkit": "^0.17.2"
+  }
+}

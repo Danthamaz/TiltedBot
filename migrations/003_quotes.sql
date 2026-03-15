@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS quotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    quote TEXT NOT NULL,
+    said_by_user_id TEXT NOT NULL,
+    added_by_user_id TEXT NOT NULL,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
