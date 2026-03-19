@@ -85,6 +85,7 @@ function getParticipantStats(match, puuid) {
     gameMode: match.info.gameMode,
     gameDuration: match.info.gameDuration,
     gameEndTimestamp: match.info.gameEndTimestamp,
+    position: participant.teamPosition || null,
   };
 }
 
@@ -103,6 +104,52 @@ function getSoloQueue(entries) {
   return entries.find(e => e.queueType === 'RANKED_SOLO_5x5') || null;
 }
 
+/**
+ * Get active (live) game for a PUUID via spectator-v5
+ * Returns null if player is not in a game.
+ */
+async function getActiveGame(puuid) {
+  try {
+    return await riotFetch(
+      `${PLATFORM_BASE}/lol/spectator/v5/active-games/by-summoner/${puuid}`
+    );
+  } catch (err) {
+    if (err.status === 404) return null; // Not in a game
+    throw err;
+  }
+}
+
+/**
+ * Champion ID to name mapping — fetched from Data Dragon and cached.
+ */
+let championMap = null;
+
+async function getChampionMap() {
+  if (championMap) return championMap;
+  try {
+    const versions = await (await fetch('https://ddragon.leagueoflegends.com/api/versions.json')).json();
+    const latest = versions[0];
+    const data = await (await fetch(`https://ddragon.leagueoflegends.com/cdn/${latest}/data/en_US/champion.json`)).json();
+    championMap = {};
+    for (const champ of Object.values(data.data)) {
+      championMap[parseInt(champ.key)] = champ.name;
+    }
+    console.log(`Champion map loaded: ${Object.keys(championMap).length} champions`);
+    return championMap;
+  } catch (err) {
+    console.error('Failed to load champion map:', err.message);
+    return {};
+  }
+}
+
+/**
+ * Look up champion name by ID. Returns 'Unknown' if not found.
+ */
+async function getChampionName(championId) {
+  const map = await getChampionMap();
+  return map[championId] || 'Unknown';
+}
+
 module.exports = {
   getAccountByRiotId,
   getAccountByPuuid,
@@ -111,6 +158,8 @@ module.exports = {
   getMatchIds,
   getMatch,
   getParticipantStats,
+  getActiveGame,
+  getChampionName,
   formatRank,
   getSoloQueue,
 };

@@ -63,22 +63,23 @@ async function handleRoleUpdateInteraction(interaction) {
   const selections = pendingUpdates.get(key);
 
   if (interaction.isStringSelectMenu()) {
+    // Defer immediately so Discord doesn't time out
+    await interaction.deferUpdate();
+
     if (interaction.customId === 'role_update_tilt') {
       selections.tilt = interaction.values[0];
-      await interaction.deferUpdate();
     } else if (interaction.customId === 'role_update_genre') {
       selections.genres = [...interaction.values];
       selections.gameNames = null; // Reset games since genres changed
       const components = rebuildComponents(interaction.guildId, selections);
-      await interaction.update({ components });
+      await interaction.editReply({ components });
     } else if (interaction.customId === 'role_update_platform') {
       selections.platforms = [...interaction.values];
       selections.gameNames = null; // Reset games since platforms changed
       const components = rebuildComponents(interaction.guildId, selections);
-      await interaction.update({ components });
+      await interaction.editReply({ components });
     } else if (interaction.customId === 'role_update_games') {
       selections.gameNames = [...interaction.values];
-      await interaction.deferUpdate();
     }
     return;
   }

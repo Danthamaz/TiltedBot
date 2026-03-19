@@ -38,7 +38,7 @@ function buildGamesSelect(games) {
  * Rebuild the full onboarding message components, including games if genre+platform are set.
  */
 function rebuildComponents(guildId, selections) {
-  const base = buildOnboardingComponents(guildId);
+  const base = buildOnboardingComponents(guildId, selections);
 
   // If both genres and platforms are selected, insert a games menu before confirm
   if (selections.genreNames?.length && selections.platformNames?.length) {
@@ -97,10 +97,12 @@ async function handleOnboardingInteraction(interaction) {
       .filter(opt => interaction.values.includes(opt.value))
       .map(opt => opt.label);
 
+    // Defer immediately so Discord doesn't time out
+    await interaction.deferUpdate();
+
     if (interaction.customId === 'onboarding_tilt') {
       selections.tilt = interaction.values[0];
       selections.tiltName = selectedLabels[0] || null;
-      await interaction.deferUpdate();
     } else if (interaction.customId === 'onboarding_genre') {
       selections.genres = [...interaction.values];
       selections.genreNames = selectedLabels;
@@ -109,7 +111,7 @@ async function handleOnboardingInteraction(interaction) {
       selections.gameNames = [];
       // Rebuild with games menu
       const components = rebuildComponents(interaction.guildId, selections);
-      await interaction.update({ components });
+      await interaction.editReply({ components });
     } else if (interaction.customId === 'onboarding_platform') {
       selections.platforms = [...interaction.values];
       selections.platformNames = selectedLabels;
@@ -118,10 +120,9 @@ async function handleOnboardingInteraction(interaction) {
       selections.gameNames = [];
       // Rebuild with games menu
       const components = rebuildComponents(interaction.guildId, selections);
-      await interaction.update({ components });
+      await interaction.editReply({ components });
     } else if (interaction.customId === 'onboarding_games') {
       selections.gameNames = [...interaction.values];
-      await interaction.deferUpdate();
     }
     return;
   }

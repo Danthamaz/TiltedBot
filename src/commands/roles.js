@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { buildRoleUpdateComponents } = require('../components/roleSelector');
 
 module.exports = [
@@ -7,6 +7,7 @@ module.exports = [
       .setName('roles')
       .setDescription('Update your server roles (tilt tier, genres, platforms)'),
     async execute(interaction) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { getMemberGames } = require('../utils/games');
       const memberRoleIds = interaction.member.roles.cache.map(r => r.id);
       const memberGames = getMemberGames(interaction.guildId, interaction.user.id);
@@ -15,9 +16,8 @@ module.exports = [
         memberRoleIds,
         { memberGames }
       );
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Update your roles below:',
-        ephemeral: true,
         components,
       });
     },
@@ -27,11 +27,11 @@ module.exports = [
       .setName('setup')
       .setDescription('Manually trigger onboarding if you missed it'),
     async execute(interaction) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { isMemberOnboarded } = require('../utils/roles');
       if (isMemberOnboarded(interaction.guildId, interaction.user.id)) {
-        await interaction.reply({
+        await interaction.editReply({
           content: 'You\'ve already completed onboarding! Use `/roles` to update your roles.',
-          ephemeral: true,
         });
         return;
       }
@@ -43,10 +43,9 @@ module.exports = [
       initPendingSelections(interaction.guildId, interaction.user.id);
 
       const components = buildOnboardingComponents(interaction.guildId);
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Pick your roles below to get started.\n\n**Step 1:** How tilted are you?\n**Step 2:** Select your Genres\n**Step 3:** Select your Platforms\n**Step 4:** Pick your Games\n\nThen hit **Confirm** to lock it in.',
         components,
-        ephemeral: true,
       });
     },
   },

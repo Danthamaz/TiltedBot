@@ -7,7 +7,7 @@ const {
 const { getRolesByCategory } = require('../utils/roles');
 const { ROLE_CATEGORIES } = require('../config');
 
-function buildTiltSelect(guildId) {
+function buildTiltSelect(guildId, selectedIds = []) {
   const tiltRoles = getRolesByCategory(guildId, ROLE_CATEGORIES.TILT);
   if (!tiltRoles.length) return null;
 
@@ -20,13 +20,14 @@ function buildTiltSelect(guildId) {
       tiltRoles.map(r => ({
         label: r.name,
         value: r.role_id,
+        default: selectedIds.includes(r.role_id),
       }))
     );
 
   return new ActionRowBuilder().addComponents(menu);
 }
 
-function buildGenreSelect(guildId) {
+function buildGenreSelect(guildId, selectedIds = []) {
   const genreRoles = getRolesByCategory(guildId, ROLE_CATEGORIES.GENRE);
   if (!genreRoles.length) return null;
 
@@ -39,13 +40,14 @@ function buildGenreSelect(guildId) {
       genreRoles.map(r => ({
         label: r.name,
         value: r.role_id,
+        default: selectedIds.includes(r.role_id),
       }))
     );
 
   return new ActionRowBuilder().addComponents(menu);
 }
 
-function buildPlatformSelect(guildId) {
+function buildPlatformSelect(guildId, selectedIds = []) {
   const platformRoles = getRolesByCategory(guildId, ROLE_CATEGORIES.PLATFORM);
   if (!platformRoles.length) return null;
 
@@ -58,6 +60,7 @@ function buildPlatformSelect(guildId) {
       platformRoles.map(r => ({
         label: r.name,
         value: r.role_id,
+        default: selectedIds.includes(r.role_id),
       }))
     );
 
@@ -73,11 +76,11 @@ function buildConfirmButton() {
   return new ActionRowBuilder().addComponents(button);
 }
 
-function buildOnboardingComponents(guildId) {
+function buildOnboardingComponents(guildId, selections = {}) {
   const rows = [
-    buildTiltSelect(guildId),
-    buildGenreSelect(guildId),
-    buildPlatformSelect(guildId),
+    buildTiltSelect(guildId, selections.tilt ? [selections.tilt] : []),
+    buildGenreSelect(guildId, selections.genres || []),
+    buildPlatformSelect(guildId, selections.platforms || []),
     buildConfirmButton(),
   ].filter(Boolean);
 

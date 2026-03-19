@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getAccountByRiotId, getSummonerByPuuid, getRankedEntries, formatRank, getSoloQueue } = require('../utils/riot');
-const { linkAccount, getLinkedAccount, getAllLinkedAccounts, getRecentMatches, getLossStreak } = require('../utils/league');
+const { getAccountByRiotId, getSummonerByPuuid, getRankedEntries, formatRank, getSoloQueue, getMatchIds, getMatch, getParticipantStats } = require('../utils/riot');
+const { linkAccount, getLinkedAccount, getAllLinkedAccounts, getRecentMatches, getLossStreak, getMainTag, getNeverPlayTags, POSITION_NAMES, isMatchTracked, recordMatch, getChampionStatsForGuild, normalizePosition, getRoleStatsForGuild, getTopChampionsForRole } = require('../utils/league');
 
 module.exports = [
   {
@@ -39,6 +39,31 @@ module.exports = [
           .setDescription('Who\'s feeding this week?')
       )
       .addSubcommand(sub =>
+        sub.setName('tags')
+          .setDescription('Show player tags based on match history')
+          .addUserOption(opt =>
+            opt.setName('player').setDescription('Player to look up').setRequired(false)
+          )
+      )
+      .addSubcommand(sub =>
+        sub.setName('champion')
+          .setDescription('Show everyone\'s stats on a champion')
+          .addStringOption(opt =>
+            opt.setName('name')
+              .setDescription('Champion name (e.g. Shyvana, Miss Fortune)')
+              .setRequired(true)
+          )
+      )
+      .addSubcommand(sub =>
+        sub.setName('role')
+          .setDescription('Show everyone\'s stats on a role')
+          .addStringOption(opt =>
+            opt.setName('name')
+              .setDescription('Role name (e.g. Support, Mid, Jungle)')
+              .setRequired(true)
+          )
+      )
+      .addSubcommand(sub =>
         sub.setName('help')
           .setDescription('Show League command details')
       ),
@@ -50,6 +75,9 @@ module.exports = [
       if (sub === 'stats') return handleStats(interaction);
       if (sub === 'leaderboard') return handleLeaderboard(interaction);
       if (sub === 'shame') return handleShame(interaction);
+      if (sub === 'tags') return handleTags(interaction);
+      if (sub === 'champion') return handleChampion(interaction);
+      if (sub === 'role') return handleRole(interaction);
       if (sub === 'help') return handleLeagueHelp(interaction);
     },
   },
@@ -291,6 +319,158 @@ async function handleShame(interaction) {
   await interaction.reply({ embeds: [embed] });
 }
 
+async function handleTags(interaction) {
+  const target = interaction.options.getUser('player') || interaction.user;
+  const account = getLinkedAccount(interaction.guildId, target.id);
+
+  if (!account) {
+    await interaction.reply({
+      content: target.id === interaction.user.id
+        ? 'You haven\'t linked your Riot account yet. Use `/league link`.'
+        : `${target.username} hasn't linked their Riot account.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.deferReply();
+
+  // Backfill: fetch last 50 matches from Riot API if we don't have them stored
+  const stored = getRecentMatches(interaction.guildId, target.id, 50);
+  if (stored.length < 50) {
+    try {
+      const matchIds = await getMatchIds(account.riot_puuid, 50);
+      let backfilled = 0;
+      for (const matchId of matchIds) {
+        if (isMatchTracked(interaction.guildId, target.id, matchId)) continue;
+        await new Promise(r => setTimeout(r, 1200));
+        const match = await getMatch(matchId);
+        const stats = getParticipantStats(match, account.riot_puuid);
+        if (!stats) continue;
+        recordMatch(interaction.guildId, target.id, matchId, stats);
+        backfilled++;
+      }
+      if (backfilled > 0) {
+        console.log(`[tags] Backfilled ${backfilled} matches for ${account.game_name}`);
+      }
+    } catch (err) {
+      console.error(`[tags] Backfill error for ${account.game_name}:`, err.message);
+      // Continue with whatever data we have
+    }
+  }
+
+  const mainTag = getMainTag(interaction.guildId, target.id);
+  const neverPlayTags = getNeverPlayTags(interaction.guildId, target.id);
+
+  if (!mainTag && !neverPlayTags.length) {
+    await interaction.editReply({
+      content: 'Not enough match data yet. Need at least 7 games on a champion or role for tags to appear.',
+    });
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff4444)
+    .setTitle(`${account.game_name}#${account.tag_line} — Tags`)
+    .setTimestamp();
+
+  if (mainTag) {
+    embed.addFields({
+      name: '🏆 Main',
+      value: `**${mainTag.champion}** (${mainTag.win_rate}% WR, ${mainTag.games} games)`,
+    });
+  }
+
+  if (neverPlayTags.length) {
+    const lines = neverPlayTags.map(t => {
+      const posName = POSITION_NAMES[t.position] || t.position;
+      return `🚫 Never Play **${posName}** (${t.win_rate}% WR, ${t.games} games)`;
+    });
+    embed.addFields({ name: 'Banned Roles', value: lines.join('\n') });
+  } else {
+    embed.addFields({ name: 'Banned Roles', value: 'None — no positions below 33% WR' });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleChampion(interaction) {
+  const championInput = interaction.options.getString('name');
+  const stats = getChampionStatsForGuild(interaction.guildId, championInput);
+
+  if (!stats.length) {
+    await interaction.reply({
+      content: `No tracked games found for **${championInput}**. Make sure the name matches (e.g. "MissFortune" or "Miss Fortune").`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const displayName = stats[0].champion || championInput;
+
+  const lines = stats.map(s => {
+    const kda = s.total_deaths > 0
+      ? ((s.total_kills + s.total_assists) / s.total_deaths).toFixed(2)
+      : 'Perfect';
+    const avgKda = `${(s.total_kills / s.games).toFixed(1)}/${(s.total_deaths / s.games).toFixed(1)}/${(s.total_assists / s.games).toFixed(1)}`;
+    return `**${s.game_name}#${s.tag_line}** — ${s.win_rate}% WR (${s.wins}W ${s.games - s.wins}L) | ${avgKda} avg | ${kda} KDA | ${s.games} games`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff4444)
+    .setTitle(`${championInput} — Server Stats`)
+    .setDescription(lines.join('\n'))
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
+}
+
+async function handleRole(interaction) {
+  const roleInput = interaction.options.getString('name');
+  const position = normalizePosition(roleInput);
+
+  if (!position) {
+    await interaction.reply({
+      content: `Unknown role **${roleInput}**. Try: Top, Jungle, Mid, Bot/ADC, or Support.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const roleName = POSITION_NAMES[position] || position;
+  const stats = getRoleStatsForGuild(interaction.guildId, position);
+
+  if (!stats.length) {
+    await interaction.reply({
+      content: `No tracked games found for **${roleName}**.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const lines = stats.map(s => {
+    const kda = s.total_deaths > 0
+      ? ((s.total_kills + s.total_assists) / s.total_deaths).toFixed(2)
+      : 'Perfect';
+    const avgKda = `${(s.total_kills / s.games).toFixed(1)}/${(s.total_deaths / s.games).toFixed(1)}/${(s.total_assists / s.games).toFixed(1)}`;
+
+    const topChamps = getTopChampionsForRole(interaction.guildId, s.user_id, position, 3);
+    const champStr = topChamps.length
+      ? topChamps.map(c => `${c.champion} (${c.win_rate}%)`).join(', ')
+      : 'No frequent picks';
+
+    return `**${s.game_name}#${s.tag_line}** — ${s.win_rate}% WR (${s.wins}W ${s.games - s.wins}L) | ${avgKda} avg | ${kda} KDA | ${s.games} games\n> Top picks: ${champStr}`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff4444)
+    .setTitle(`${roleName} — Server Stats`)
+    .setDescription(lines.join('\n\n'))
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
+}
+
 async function handleLeagueHelp(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0xff4444)
@@ -317,8 +497,20 @@ async function handleLeagueHelp(interaction) {
         value: 'Wall of Shame for the past week — sorted by most deaths.\nShows total deaths, KDA, and losses.',
       },
       {
+        name: '/league tags [@player]',
+        value: 'Auto-generated player tags based on last 50 tracked matches.\n"Main" = highest win rate champion (min 3 games).\n"Never Play" = positions with under 33% win rate.',
+      },
+      {
+        name: '/league champion [name]',
+        value: 'Show every linked player\'s KDA and win rate on a specific champion.\nExample: `/league champion Shyvana`',
+      },
+      {
+        name: '/league role [name]',
+        value: 'Show every linked player\'s KDA and win rate for a specific role, plus their top 3 picks.\nExample: `/league role Support`',
+      },
+      {
         name: 'Auto Tracking',
-        value: 'The bot checks for new matches every 3 minutes. Loss streaks are tracked automatically and shame messages are posted in #league.',
+        value: 'The bot checks for new matches every 3 minutes. Loss streaks are tracked automatically and shame messages are posted in #league.\nWhen multiple linked players are in the same game, the bot announces the game in #league.',
       }
     )
     .setTimestamp();
