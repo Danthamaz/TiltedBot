@@ -106,6 +106,30 @@ module.exports = [
               )
           )
       )
+      .addSubcommandGroup(group =>
+        group
+          .setName('league')
+          .setDescription('Manage player League accounts')
+          .addSubcommand(sub =>
+            sub
+              .setName('link')
+              .setDescription('Link a Riot account for a player')
+              .addUserOption(opt =>
+                opt.setName('player').setDescription('The player to link').setRequired(true)
+              )
+              .addStringOption(opt =>
+                opt.setName('riot-id').setDescription('Riot ID (e.g. Name#TAG)').setRequired(true)
+              )
+          )
+          .addSubcommand(sub =>
+            sub
+              .setName('unlink')
+              .setDescription('Unlink a player\'s Riot account')
+              .addUserOption(opt =>
+                opt.setName('player').setDescription('The player to unlink').setRequired(true)
+              )
+          )
+      )
       .addSubcommand(sub =>
         sub.setName('roster').setDescription('Show server role breakdown')
       )
@@ -198,6 +222,59 @@ module.exports = [
           } else {
             await interaction.reply({ content: `Removed **${name}** from the game catalog.`, ephemeral: true });
           }
+        }
+        return;
+      }
+
+      // Handle league subcommand group
+      if (subcommandGroup === 'league') {
+        const { linkAccount, getLinkedAccount, unlinkAccount } = require('../utils/league');
+        const { getAccountByRiotId, getSummonerByPuuid } = require('../utils/riot');
+        const player = interaction.options.getUser('player');
+
+        if (subcommand === 'link') {
+          const riotId = interaction.options.getString('riot-id');
+          const parts = riotId.split('#');
+          if (parts.length !== 2) {
+            await interaction.reply({ content: 'Invalid format. Use `Name#TAG`.', ephemeral: true });
+            return;
+          }
+          const [gameName, tagLine] = parts;
+
+          await interaction.deferReply({ ephemeral: true });
+
+          try {
+            const account = await getAccountByRiotId(gameName, tagLine);
+            const summoner = await getSummonerByPuuid(account.puuid);
+
+            linkAccount(guildId, player.id, account.puuid, account.gameName, account.tagLine, summoner.id);
+
+            await interaction.editReply({
+              content: `Linked **${account.gameName}#${account.tagLine}** to ${player}.`,
+            });
+          } catch (err) {
+            if (err.status === 404) {
+              await interaction.editReply({ content: 'Riot account not found. Check the name and tag.' });
+            } else {
+              console.error('Admin link error:', err);
+              await interaction.editReply({ content: 'Failed to link account. Try again later.' });
+            }
+          }
+        } else if (subcommand === 'unlink') {
+          const account = getLinkedAccount(guildId, player.id);
+          if (!account) {
+            await interaction.reply({
+              content: `${player.username} doesn't have a linked Riot account.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          unlinkAccount(guildId, player.id);
+          await interaction.reply({
+            content: `Unlinked **${account.game_name}#${account.tag_line}** from ${player}. All match history and streak data has been removed.`,
+            ephemeral: true,
+          });
         }
         return;
       }
@@ -426,6 +503,13 @@ module.exports = [
               value: [
                 '`/admin game add [name] [genres] [platforms]` — Add a game (platforms optional)',
                 '`/admin game remove [name]` — Remove a game',
+              ].join('\n'),
+            },
+            {
+              name: 'League Accounts',
+              value: [
+                '`/admin league link @player [riot-id]` — Link a Riot account for a player',
+                '`/admin league unlink @player` — Unlink a player\'s Riot account and remove their data',
               ].join('\n'),
             },
             {

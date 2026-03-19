@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getAccountByRiotId, getSummonerByPuuid, getRankedEntries, formatRank, getSoloQueue, getMatchIds, getMatch, getParticipantStats } = require('../utils/riot');
-const { linkAccount, getLinkedAccount, getAllLinkedAccounts, getRecentMatches, getLossStreak, getMainTag, getNeverPlayTags, POSITION_NAMES, isMatchTracked, recordMatch, getChampionStatsForGuild, normalizePosition, getRoleStatsForGuild, getTopChampionsForRole } = require('../utils/league');
+const { linkAccount, getLinkedAccount, getAllLinkedAccounts, unlinkAccount, getRecentMatches, getLossStreak, getMainTag, getNeverPlayTags, POSITION_NAMES, isMatchTracked, recordMatch, getChampionStatsForGuild, normalizePosition, getRoleStatsForGuild, getTopChampionsForRole } = require('../utils/league');
 
 module.exports = [
   {
@@ -64,6 +64,17 @@ module.exports = [
           )
       )
       .addSubcommand(sub =>
+        sub.setName('accounts')
+          .setDescription('Show linked Riot account(s)')
+          .addUserOption(opt =>
+            opt.setName('player').setDescription('Player to look up').setRequired(false)
+          )
+      )
+      .addSubcommand(sub =>
+        sub.setName('unlink')
+          .setDescription('Unlink your Riot account')
+      )
+      .addSubcommand(sub =>
         sub.setName('help')
           .setDescription('Show League command details')
       ),
@@ -78,6 +89,8 @@ module.exports = [
       if (sub === 'tags') return handleTags(interaction);
       if (sub === 'champion') return handleChampion(interaction);
       if (sub === 'role') return handleRole(interaction);
+      if (sub === 'accounts') return handleAccounts(interaction);
+      if (sub === 'unlink') return handleUnlink(interaction);
       if (sub === 'help') return handleLeagueHelp(interaction);
     },
   },
@@ -471,6 +484,53 @@ async function handleRole(interaction) {
   await interaction.reply({ embeds: [embed] });
 }
 
+async function handleAccounts(interaction) {
+  const target = interaction.options.getUser('player') || interaction.user;
+  const account = getLinkedAccount(interaction.guildId, target.id);
+
+  if (!account) {
+    await interaction.reply({
+      content: target.id === interaction.user.id
+        ? 'You don\'t have a linked Riot account. Use `/league link` to link one.'
+        : `${target.username} doesn't have a linked Riot account.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const linkedDate = account.linked_at
+    ? new Date(account.linked_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    : 'Unknown';
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff4444)
+    .setTitle(`${target.id === interaction.user.id ? 'Your' : `${target.username}'s`} Linked Account`)
+    .addFields(
+      { name: 'Riot ID', value: `**${account.game_name}#${account.tag_line}**`, inline: true },
+      { name: 'Linked Since', value: linkedDate, inline: true }
+    )
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+async function handleUnlink(interaction) {
+  const account = getLinkedAccount(interaction.guildId, interaction.user.id);
+  if (!account) {
+    await interaction.reply({
+      content: 'You don\'t have a linked Riot account.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  unlinkAccount(interaction.guildId, interaction.user.id);
+  await interaction.reply({
+    content: `Unlinked **${account.game_name}#${account.tag_line}** from your Discord account. All match history and streak data has been removed.`,
+    ephemeral: true,
+  });
+}
+
 async function handleLeagueHelp(interaction) {
   const embed = new EmbedBuilder()
     .setColor(0xff4444)
@@ -507,6 +567,14 @@ async function handleLeagueHelp(interaction) {
       {
         name: '/league role [name]',
         value: 'Show every linked player\'s KDA and win rate for a specific role, plus their top 3 picks.\nExample: `/league role Support`',
+      },
+      {
+        name: '/league accounts [@player]',
+        value: 'Show the Riot account linked to you or another player.\nIncludes the Riot ID and when it was linked.',
+      },
+      {
+        name: '/league unlink',
+        value: 'Unlink your Riot account from your Discord. Removes all match history and streak data.',
       },
       {
         name: 'Auto Tracking',

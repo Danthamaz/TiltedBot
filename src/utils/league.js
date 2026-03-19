@@ -282,10 +282,28 @@ function getChampionStatsForGuild(guildId, championName) {
   `).all(guildId, championName, normalized);
 }
 
+/**
+ * Unlink a Riot account from a Discord user.
+ * Removes the account and all associated match history, loss streaks, and squad streaks.
+ */
+function unlinkAccount(guildId, userId) {
+  const db = getDb();
+  const account = db.prepare(
+    'SELECT * FROM riot_accounts WHERE guild_id = ? AND user_id = ?'
+  ).get(guildId, userId);
+  if (!account) return false;
+
+  db.prepare('DELETE FROM match_history WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+  db.prepare('DELETE FROM loss_streaks WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+  db.prepare('DELETE FROM riot_accounts WHERE guild_id = ? AND user_id = ?').run(guildId, userId);
+  return account;
+}
+
 module.exports = {
   linkAccount,
   getLinkedAccount,
   getAllLinkedAccounts,
+  unlinkAccount,
   isMatchTracked,
   recordMatch,
   updateLossStreak,
