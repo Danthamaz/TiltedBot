@@ -248,8 +248,8 @@ async function handleLeaderboard(interaction) {
           sortValue: tierToValue(solo.tier, solo.rank, solo.leaguePoints),
         });
       }
-    } catch {
-      // Skip accounts that fail
+    } catch (err) {
+      console.error(`[leaderboard] Failed for ${account.game_name}#${account.tag_line}:`, err.message);
     }
   }
 
