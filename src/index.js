@@ -10,6 +10,7 @@ const config = require('./config');
 const { getDb } = require('./database');
 const { getRolesByCategory, addRoleDefinition } = require('./utils/roles');
 const { startMatchTracker } = require('./services/matchTracker');
+const { startClashTracker } = require('./services/clashTracker');
 
 // Initialize the client
 const client = new Client({
@@ -71,6 +72,7 @@ client.once('clientReady', async () => {
 
   // Start League match tracker
   startMatchTracker(client);
+  startClashTracker(client);
 
   console.log('Bot is ready.');
 });
