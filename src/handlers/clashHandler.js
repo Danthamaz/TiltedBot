@@ -1,6 +1,7 @@
 const { ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const { getSignups, getCaptain, addSignup, removeSignup, updateSignupRole, getReminderMessages } = require('../utils/clashDb');
 const { buildClashEmbed, buildClashButtons } = require('./clashEmbedBuilder');
+const { postTeamSuggestion } = require('../services/clashTracker');
 
 const ROLE_OPTIONS = [
   { label: 'Top', value: 'TOP' },
@@ -78,6 +79,20 @@ async function handleSignupButton(interaction) {
 
   // Update all reminder embeds for this phase
   await updateAllEmbeds(interaction, guildId, tournamentId, phaseId);
+
+  // Auto-trigger team suggestion when captain + 5 signups reached
+  const allSignups = getSignups(guildId, tournamentId, phaseId);
+  const currentCaptain = getCaptain(guildId, tournamentId, phaseId);
+  if (currentCaptain && allSignups.length >= 5) {
+    // Get the title from the original embed for context
+    try {
+      const msg = await interaction.channel.messages.fetch(interaction.message.id);
+      const embedTitle = msg?.embeds[0]?.title || 'Clash';
+      await postTeamSuggestion(interaction.channel, guildId, tournamentId, phaseId, embedTitle);
+    } catch (err) {
+      console.error('Failed to post auto team suggestion:', err.message);
+    }
+  }
 }
 
 async function handleLeaveButton(interaction) {
