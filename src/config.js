@@ -5,6 +5,8 @@ module.exports = {
   clientId: process.env.CLIENT_ID,
   guildId: process.env.GUILD_ID,
   riotApiKey: process.env.RIOT_API_KEY,
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  ANTHROPIC_MODEL: 'claude-haiku-4-5-20251001',
 
   // Riot API config
   RIOT_REGION: 'americas',        // For account/match APIs
