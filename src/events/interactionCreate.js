@@ -1,6 +1,7 @@
 const { Collection, MessageFlags } = require('discord.js');
 const { handleOnboardingInteraction } = require('../handlers/onboardingHandler');
 const { handleRoleUpdateInteraction } = require('../handlers/roleUpdateHandler');
+const { handleClashInteraction } = require('../handlers/clashHandler');
 
 module.exports = {
   name: 'interactionCreate',
@@ -42,6 +43,11 @@ module.exports = {
     // Handle role update select menus and buttons
     if (interaction.customId?.startsWith('role_update_')) {
       return handleRoleUpdateInteraction(interaction);
+    }
+
+    // Handle clash signup buttons and role dropdowns
+    if (interaction.customId?.startsWith('clash_')) {
+      return handleClashInteraction(interaction);
     }
   },
 };
