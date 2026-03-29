@@ -83,7 +83,7 @@ async function handleSignupButton(interaction) {
   // Auto-trigger team suggestion when captain + 5 signups reached
   const allSignups = getSignups(guildId, tournamentId, phaseId);
   const currentCaptain = getCaptain(guildId, tournamentId, phaseId);
-  if (currentCaptain && allSignups.length >= 5) {
+  if (currentCaptain && allSignups.length === 5) {
     // Get the title from the original embed for context
     try {
       const msg = await interaction.channel.messages.fetch(interaction.message.id);

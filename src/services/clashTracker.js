@@ -6,6 +6,17 @@ const { buildClashEmbed, buildClashButtons } = require('../handlers/clashEmbedBu
 const { suggestTeam } = require('./clashTeamBuilder');
 const { ROLE_DISPLAY } = require('../handlers/clashEmbedBuilder');
 
+/**
+ * Convert a Riot nameKey like "bilgewaterCup" to "Bilgewater Cup".
+ */
+function formatTournamentName(nameKey) {
+  if (!nameKey) return null;
+  return nameKey
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, c => c.toUpperCase())
+    .trim();
+}
+
 const POLL_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
 const THREE_HOURS = 3 * 60 * 60 * 1000;
 const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -84,7 +95,7 @@ async function checkClashReminders(client, guild) {
       const dateStr = phaseDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
       const timeStr = phaseDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
       const title = `Clash — ${dayName}, ${dateStr}`;
-      const tournamentName = tournament.nameKey || 'Clash Tournament';
+      const tournamentName = formatTournamentName(tournament.nameKey) || 'Clash Tournament';
       const lockInTime = timeStr;
 
       // Reminder 1: Formation opens (registrationTime has passed)
