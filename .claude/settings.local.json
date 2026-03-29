@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(ssh:*)",
-      "Bash(sleep:*)"
+      "Bash(sleep:*)",
+      "Bash(find C:AppsTiltedBot -maxdepth 2 -type f \\\\\\(-name *.md -o -name *.yml -o -name *.yaml -o -name .env* -o -name *.sh \\\\\\))",
+      "Read(//c/Users/Danie/Downloads/**)",
+      "Bash(ssh-keygen:*)",
+      "Bash(ls:*)",
+      "Bash(node -c src/utils/league.js)",
+      "Bash(node -c src/commands/league.js)",
+      "Bash(node -c src/commands/admin.js)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)"
     ]
   }
 }
