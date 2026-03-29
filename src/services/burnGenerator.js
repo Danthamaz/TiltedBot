@@ -126,7 +126,7 @@ Generate a roast for this loss.`;
  * Generate an AI burn message for a squad loss.
  *
  * @param {Object} opts
- * @param {string[]} opts.squadMembers - Array of { name, champion, kda, position } objects
+ * @param {Object[]} opts.squadMembers - Array of { name, champion, kda, position } objects
  * @param {number} opts.streak - Current squad loss streak
  * @returns {Promise<string|null>} The burn message, or null on failure
  */
