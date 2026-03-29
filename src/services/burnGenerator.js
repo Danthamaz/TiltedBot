@@ -59,6 +59,30 @@ const SQUAD_INSTRUCTIONS = `You are roasting a GROUP of players who lost togethe
 - Blame the group dynamic, not just individuals
 - If specific players have notably bad stats, call them out by name`;
 
+// Player-specific lore — quotes and context the AI can use for targeted roasts
+// Key: lowercase player name, Value: array of { condition, lore }
+// condition: function(champion, kda) => boolean (null = always applies)
+const PLAYER_LORE = {
+  'okyas': [
+    {
+      condition: (champion) => champion?.toLowerCase() === 'sona',
+      lore: 'IMPORTANT: OkyaS once boldly claimed "I can\'t lose, I\'m on Sona." He is now losing on Sona. Make sure to throw this quote back in his face.',
+    },
+  ],
+};
+
+/**
+ * Get any applicable player lore for the prompt.
+ */
+function getPlayerLore(playerName, champion, kda) {
+  const entries = PLAYER_LORE[playerName.toLowerCase()];
+  if (!entries) return '';
+  const applicable = entries
+    .filter(e => !e.condition || e.condition(champion, kda))
+    .map(e => e.lore);
+  return applicable.length ? '\n\nPLAYER LORE:\n' + applicable.join('\n') : '';
+}
+
 /**
  * Format match history into a readable string for the prompt.
  */
@@ -97,6 +121,7 @@ async function generateBurn({ playerName, streak, champion, kda, position, guild
     if (isDephi) {
       systemPrompt += '\n' + DEPHARIO_EXTRA;
     }
+    systemPrompt += getPlayerLore(playerName, champion, kda);
 
     const userPrompt = `Player: ${playerName}
 Loss streak: ${streak}
