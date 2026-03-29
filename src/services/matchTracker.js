@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const config = require('../config');
 const { getMatchIds, getMatch, getParticipantStats, getActiveGame, getChampionName } = require('../utils/riot');
 const { getAllLinkedAccounts, isMatchTracked, recordMatch, updateLossStreak, POSITION_NAMES, updateSquadStreak, getLossStreak } = require('../utils/league');
+const { generateBurn, generateSquadBurn } = require('./burnGenerator');
 
 // Track announced live games so we don't repeat announcements
 // Key: gameId, Value: { announcedAt, matchId (set later), players, messageId }
@@ -283,7 +284,19 @@ async function checkGuildMatches(client, guild) {
 
           // Dephario gets called out on EVERY loss
           if (!stats.win && isDephi) {
-            const msg = getDepharioMessage(streakResult.streak);
+            // Try AI-generated burn, fall back to hardcoded
+            const aiMsg = await generateBurn({
+              playerName: account.game_name,
+              streak: streakResult.streak,
+              champion: stats.champion,
+              kda: { kills: stats.kills, deaths: stats.deaths, assists: stats.assists },
+              position: stats.position,
+              guildId: guild.id,
+              userId: account.user_id,
+              isDephario: true,
+            });
+            const msg = aiMsg || getDepharioMessage(streakResult.streak);
+
             const embed = new EmbedBuilder()
               .setColor(0xff0000)
               .setTitle('💀 Dephario Update')
@@ -304,7 +317,19 @@ async function checkGuildMatches(client, guild) {
           }
           // Regular players get shamed on loss streaks (2+)
           else if (!stats.win && streakResult.streak >= 2) {
-            const msg = getShameMessage(streakResult.streak);
+            // Try AI-generated burn, fall back to hardcoded
+            const aiMsg = await generateBurn({
+              playerName: account.game_name,
+              streak: streakResult.streak,
+              champion: stats.champion,
+              kda: { kills: stats.kills, deaths: stats.deaths, assists: stats.assists },
+              position: stats.position,
+              guildId: guild.id,
+              userId: account.user_id,
+              isDephario: false,
+            });
+            const msg = aiMsg || getShameMessage(streakResult.streak);
+
             if (msg) {
               const embed = new EmbedBuilder()
                 .setColor(0xff4444)
@@ -449,7 +474,23 @@ async function announceGameEnd(channel, guildId, matchId, match) {
 
   // Add squad streak info on loss
   if (!squadWon && squadResult.streak >= 2) {
-    const roast = getSquadShameMessage(squadResult.streak);
+    // Build squad member info for AI burn
+    const squadMemberInfo = gameData.players.map(p => {
+      const participant = match.info.participants.find(mp => mp.puuid === p.puuid);
+      if (!participant) return { name: p.gameName, champion: 'Unknown', kda: { kills: 0, deaths: 0, assists: 0 }, position: '' };
+      return {
+        name: p.gameName,
+        champion: participant.championName,
+        kda: { kills: participant.kills, deaths: participant.deaths, assists: participant.assists },
+        position: participant.teamPosition || '',
+      };
+    });
+
+    const aiRoast = await generateSquadBurn({
+      squadMembers: squadMemberInfo,
+      streak: squadResult.streak,
+    });
+    const roast = aiRoast || getSquadShameMessage(squadResult.streak);
     description += `\n\n🔥 **Squad loss streak: ${squadResult.streak}**\n${roast}`;
   }
 
