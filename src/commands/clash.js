@@ -46,13 +46,10 @@ async function handleSchedule(interaction) {
       if (!t.schedule) continue;
       for (const phase of t.schedule) {
         if (phase.cancelled) continue;
-        const date = new Date(phase.startTime);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-        const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-        const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
-        const regDate = new Date(phase.registrationTime);
-        const regStr = regDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-        lines.push(`> **${dayName}, ${dateStr}** at ${timeStr}\n> Registration opens: ${regStr}\n> Tournament: ${t.nameKey || 'Clash'}`);
+        // Use Discord timestamps so times display in each user's local timezone
+        const startUnix = Math.floor(phase.startTime / 1000);
+        const regUnix = Math.floor(phase.registrationTime / 1000);
+        lines.push(`> **<t:${startUnix}:F>**\n> Lock-in: <t:${startUnix}:t> (<t:${startUnix}:R>)\n> Registration opens: <t:${regUnix}:D>\n> Tournament: ${t.nameKey || 'Clash'}`);
       }
     }
 

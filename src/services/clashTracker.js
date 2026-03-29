@@ -89,14 +89,14 @@ async function checkClashReminders(client, guild) {
       const registrationTime = phase.registrationTime;
       const startTime = phase.startTime;
 
-      // Determine the day name and date for this phase
+      // Use Discord timestamps so times display in each user's local timezone
+      const startUnix = Math.floor(startTime / 1000);
       const phaseDate = new Date(startTime);
       const dayName = phaseDate.toLocaleDateString('en-US', { weekday: 'long' });
       const dateStr = phaseDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-      const timeStr = phaseDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
       const title = `Clash — ${dayName}, ${dateStr}`;
       const tournamentName = formatTournamentName(tournament.nameKey) || 'Clash Tournament';
-      const lockInTime = timeStr;
+      const lockInTime = `<t:${startUnix}:t> (<t:${startUnix}:R>)`;
 
       // Reminder 1: Formation opens (registrationTime has passed)
       if (now >= registrationTime && !isReminderSent(guild.id, tournamentId, phaseId, 'formation')) {
