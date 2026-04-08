@@ -71,6 +71,22 @@ const PLAYER_LORE = {
   ],
 };
 
+// Generic single-loss fallback messages (for players roasted on every loss, when AI fails)
+const SINGLE_LOSS_MESSAGES = [
+  "Another L. Shocking absolutely no one.",
+  "Lost again. Water is wet. Sky is blue.",
+  "Doing what they do best. (Losing.)",
+  "Classic L. Consistency is a virtue, I guess.",
+  "Lost. In other news, grass is green.",
+  "Another loss added to the collection.",
+  "That's an L. The man is nothing if not consistent.",
+  "Lost again. Some things never change.",
+];
+
+function getSingleLossMessage() {
+  return SINGLE_LOSS_MESSAGES[Math.floor(Math.random() * SINGLE_LOSS_MESSAGES.length)];
+}
+
 /**
  * Get any applicable player lore for the prompt.
  */
@@ -190,4 +206,4 @@ Generate a roast for this squad loss.`;
   }
 }
 
-module.exports = { generateBurn, generateSquadBurn };
+module.exports = { generateBurn, generateSquadBurn, getSingleLossMessage };
