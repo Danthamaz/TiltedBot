@@ -2,15 +2,20 @@ const { EmbedBuilder } = require('discord.js');
 const config = require('../config');
 const { getMatchIds, getMatch, getParticipantStats, getActiveGame, getChampionName } = require('../utils/riot');
 const { getAllLinkedAccounts, isMatchTracked, recordMatch, updateLossStreak, POSITION_NAMES, updateSquadStreak, getLossStreak } = require('../utils/league');
-const { generateBurn, generateSquadBurn } = require('./burnGenerator');
+const { generateBurn, generateSquadBurn, getSingleLossMessage } = require('./burnGenerator');
+const { isGoodGame, generateCompliment, getFallbackCompliment } = require('./complimentGenerator');
+const { generateGameReview } = require('./gameReviewGenerator');
 
 // Track announced live games so we don't repeat announcements
 // Key: gameId, Value: { announcedAt, matchId (set later), players, messageId }
 const activeGames = new Map();
 
-// Dephario's Discord user ID — set this after he links
-// You can also use his Riot PUUID or game name to identify him
 const DEPHARIO_NAME = 'Dephario';
+const TURBOTWIT_NAME = 'TurboTwit';
+
+function isTurboTwit(account) {
+  return account.game_name.toLowerCase() === TURBOTWIT_NAME.toLowerCase();
+}
 
 // Loss streak shame messages — each streak level has multiple options picked at random
 const SHAME_MESSAGES = {
@@ -77,87 +82,6 @@ const SHAME_MESSAGES = {
   ],
 };
 
-// Dephario shame messages — completely unhinged, escalating harder
-const DEPHARIO_MESSAGES = {
-  1: [
-    "Dephario lost again. Shocking absolutely no one.",
-    "Another L for Dephario. Water is wet. Sky is blue.",
-    "Dephario doing Dephario things. (Losing.)",
-    "Dephario lost. In other news, grass is green.",
-    "Classic Dephario L. The man is consistent, I'll give him that.",
-  ],
-  2: [
-    "Dephario down bad. Two in a row.",
-    "Back to back L's for Dephario. The man can't catch a break. (He doesn't deserve one.)",
-    "Two straight losses. Dephario is in his villain era. The villain that loses.",
-    "Dephario doubled down on losing. Bold strategy.",
-  ],
-  3: [
-    "Dephario is speedrunning losses. Three straight.",
-    "Three in a row for Dephario. His teammates are filing a class action lawsuit.",
-    "Dephario three-peating the L. He's the LeBron of losing.",
-    "Hat trick of losses. Dephario is built different. (Worse.)",
-    "THREE straight Dephario L's. The man is allergic to winning.",
-  ],
-  4: [
-    "Someone take Dephario's keyboard. Four L's.",
-    "Four in a row. Dephario's MMR just applied for witness protection.",
-    "FOUR losses straight. Dephario is playing like he's blindfolded.",
-    "Dephario is 0-4. His champion pool is a puddle and it's evaporating.",
-    "Four straight. At this point Dephario is griefing the CONCEPT of League.",
-  ],
-  5: [
-    "DEPHARIO FIVE LOSSES IN A ROW. THIS MAN IS COOKED.",
-    "Five straight. Dephario isn't tilted, he IS the tilt.",
-    "FIVE. Dephario's account should be donated to science.",
-    "Dephario has lost FIVE IN A ROW. Even his champions are trying to uninstall.",
-    "5-0 in losses. Dephario is the undefeated champion of taking L's.",
-  ],
-  6: [
-    "Dephario has lost SIX IN A ROW. Genuinely concerning.",
-    "SIX. Dephario is the final boss of Iron IV.",
-    "Six straight losses. Dephario's hard drive is filing for divorce.",
-    "DEPHARIO SIX L's. Riot is considering naming a debuff after him.",
-    "Half a dozen. Dephario couldn't win a game against bots right now.",
-  ],
-  7: [
-    "SEVEN. Dephario is the final boss of losing.",
-    "Seven in a row. Dephario has unlocked a new tier below Iron: Dephario Tier.",
-    "SEVEN losses. Scientists are studying this man's ability to lose.",
-    "Dephario is 0-7. His champion select screen should just say 'Are you sure?'",
-    "Seven straight. At this point, winning would actually be suspicious.",
-  ],
-  8: [
-    "Dephario has transcended tilt. He IS the tilt.",
-    "EIGHT losses in a row. Dephario should be legally classified as a natural disaster.",
-    "Eight. Dephario's teammates are developing PTSD.",
-    "DEPHARIO EIGHT STRAIGHT L's. The man is operating on a different plane of existence. A worse one.",
-    "8 in a row. Dephario isn't playing League anymore. League is playing him.",
-  ],
-  9: [
-    "NINE. Dephario's loss streak has its own Wikipedia page now.",
-    "Nine in a row. Dephario is the human equivalent of a cannon minion walking into tower.",
-    "NINE LOSSES. Dephario's KDA has been declared a biohazard.",
-    "Dephario is 0-9. Riot just sent him a personal 'uninstall' recommendation.",
-  ],
-  10: [
-    "DOUBLE DIGIT LOSSES. DEPHARIO HAS ACHIEVED WHAT SCIENTISTS SAID WAS IMPOSSIBLE.",
-    "TEN IN A ROW. Dephario should be inducted into the Hall of Shame. As the founder.",
-    "10 LOSSES. Dephario's account called the police. It wants out.",
-    "Dephario has lost TEN GAMES IN A ROW. This man is the physical manifestation of a loss streak. He doesn't take L's, he IS the L.",
-  ],
-  11: [
-    "ELEVEN. At this point Dephario isn't even playing the game. The game is playing a cruel joke on him.",
-    "Dephario has lost ELEVEN in a row. We should start a GoFundMe for his mental health.",
-    "11 STRAIGHT LOSSES. Dephario has broken the matrix. Nothing is real anymore.",
-  ],
-  12: [
-    "TWELVE. I'm running out of ways to roast this man. He loses faster than I can type.",
-    "Dephario is 0-12. His internet provider should cut him off as an act of mercy.",
-    "TWELVE IN A ROW. Someone check if Dephario is actually a bot. A really bad bot.",
-  ],
-};
-
 // Dephario loss reaction emojis (snowballing)
 const DEPHARIO_REACTIONS = [
   ['😂'],                          // 1 loss
@@ -178,12 +102,6 @@ function getShameMessage(streak) {
   const key = Math.min(streak, 10);
   const options = SHAME_MESSAGES[key];
   return options ? pick(options) : pick(SHAME_MESSAGES[10]);
-}
-
-function getDepharioMessage(streak) {
-  const key = Math.min(streak, 12);
-  const options = DEPHARIO_MESSAGES[key];
-  return options ? pick(options) : pick(DEPHARIO_MESSAGES[12]);
 }
 
 function getDepharioReactions(streak) {
@@ -281,10 +199,10 @@ async function checkGuildMatches(client, guild) {
         // Post to league channel
         if (leagueChannel) {
           const isDephi = isDephario(account);
+          const isTwit = isTurboTwit(account);
 
-          // Dephario gets called out on EVERY loss
-          if (!stats.win && isDephi) {
-            // Try AI-generated burn, fall back to hardcoded
+          if (!stats.win && (isDephi || streakResult.streak >= 2)) {
+            // Losses: Dephario on every loss, others on streak >= 2
             const aiMsg = await generateBurn({
               playerName: account.game_name,
               streak: streakResult.streak,
@@ -293,42 +211,17 @@ async function checkGuildMatches(client, guild) {
               position: stats.position,
               guildId: guild.id,
               userId: account.user_id,
-              isDephario: true,
+              isDephario: isDephi,
             });
-            const msg = aiMsg || getDepharioMessage(streakResult.streak);
 
-            const embed = new EmbedBuilder()
-              .setColor(0xff0000)
-              .setTitle('💀 Dephario Update')
-              .setDescription(
-                `**${account.game_name}** just lost on **${stats.champion}** (${stats.kills}/${stats.deaths}/${stats.assists}).\n\n` +
-                `${msg}\n\n` +
-                (streakResult.streak > 1 ? `🔥 Loss streak: **${streakResult.streak}**` : '')
-              )
-              .setTimestamp();
-
-            const sent = await leagueChannel.send({ embeds: [embed] });
-
-            // Add snowballing reactions
-            const reactions = getDepharioReactions(streakResult.streak);
-            for (const emoji of reactions) {
-              await sent.react(emoji).catch(() => {});
+            let msg;
+            if (aiMsg) {
+              msg = aiMsg;
+            } else if (streakResult.streak >= 2) {
+              msg = getShameMessage(streakResult.streak);
+            } else {
+              msg = getSingleLossMessage();
             }
-          }
-          // Regular players get shamed on loss streaks (2+)
-          else if (!stats.win && streakResult.streak >= 2) {
-            // Try AI-generated burn, fall back to hardcoded
-            const aiMsg = await generateBurn({
-              playerName: account.game_name,
-              streak: streakResult.streak,
-              champion: stats.champion,
-              kda: { kills: stats.kills, deaths: stats.deaths, assists: stats.assists },
-              position: stats.position,
-              guildId: guild.id,
-              userId: account.user_id,
-              isDephario: false,
-            });
-            const msg = aiMsg || getShameMessage(streakResult.streak);
 
             if (msg) {
               const embed = new EmbedBuilder()
@@ -336,20 +229,63 @@ async function checkGuildMatches(client, guild) {
                 .setTitle('📉 Tilt Alert')
                 .setDescription(
                   `<@${account.user_id}> lost on **${stats.champion}** (${stats.kills}/${stats.deaths}/${stats.assists}).\n\n` +
-                  `${msg}\n\n` +
-                  `🔥 Loss streak: **${streakResult.streak}**`
+                  `${msg}` +
+                  (streakResult.streak > 1 ? `\n\n🔥 Loss streak: **${streakResult.streak}**` : '')
+                )
+                .setTimestamp();
+
+              const sent = await leagueChannel.send({ embeds: [embed] });
+
+              // Dephario still gets snowballing reactions
+              if (isDephi) {
+                const reactions = getDepharioReactions(streakResult.streak);
+                for (const emoji of reactions) {
+                  await sent.react(emoji).catch(() => {});
+                }
+              }
+            }
+          }
+          // Compliment on a really good win
+          else if (stats.win) {
+            const goodReason = isGoodGame(
+              { kills: stats.kills, deaths: stats.deaths, assists: stats.assists },
+              isTwit
+            );
+
+            if (goodReason) {
+              const aiMsg = await generateCompliment({
+                playerName: account.game_name,
+                champion: stats.champion,
+                kda: { kills: stats.kills, deaths: stats.deaths, assists: stats.assists },
+                position: stats.position,
+                guildId: guild.id,
+                userId: account.user_id,
+                isTurboTwit: isTwit,
+                reason: goodReason,
+              });
+              const msg = aiMsg || getFallbackCompliment(goodReason, isTwit);
+
+              const titles = ['🔥 Player Diff', '👑 Carry Alert'];
+              const title = titles[Math.floor(Math.random() * titles.length)];
+
+              const embed = new EmbedBuilder()
+                .setColor(0xffd700)
+                .setTitle(title)
+                .setDescription(
+                  `<@${account.user_id}> went off on **${stats.champion}** (${stats.kills}/${stats.deaths}/${stats.assists}).\n\n` +
+                  `${msg}`
                 )
                 .setTimestamp();
 
               await leagueChannel.send({ embeds: [embed] });
             }
-          }
-          // Win after a loss streak
-          else if (stats.win && streakResult.wasOnStreak >= 3) {
-            const name = isDephi ? 'Dephario' : `<@${account.user_id}>`;
-            await leagueChannel.send({
-              content: `${name} finally won a game after **${streakResult.wasOnStreak}** straight losses. About time.`,
-            });
+
+            // Win after a loss streak (still fires even if also a good game)
+            if (streakResult.wasOnStreak >= 3) {
+              await leagueChannel.send({
+                content: `<@${account.user_id}> finally won a game after **${streakResult.wasOnStreak}** straight losses. About time.`,
+              });
+            }
           }
         }
       }
@@ -466,11 +402,47 @@ async function announceGameEnd(channel, guildId, matchId, match) {
 
   const duration = Math.floor(match.info.gameDuration / 60);
 
+  // Generate AI game review
+  const allAccounts = getAllLinkedAccounts(guildId);
+  const reviewPlayers = gameData.players.map(p => {
+    const participant = match.info.participants.find(mp => mp.puuid === p.puuid);
+    const account = allAccounts.find(a => a.user_id === p.userId);
+    if (!participant) return { name: p.gameName, champion: 'Unknown', kda: { kills: 0, deaths: 0, assists: 0 }, position: '', isDephario: false, isTurboTwit: false };
+    return {
+      name: p.gameName,
+      champion: participant.championName,
+      kda: { kills: participant.kills, deaths: participant.deaths, assists: participant.assists },
+      position: participant.teamPosition || '',
+      isDephario: account ? isDephario(account) : false,
+      isTurboTwit: account ? isTurboTwit(account) : false,
+    };
+  });
+
+  const allSameTeam = (() => {
+    const teamIds = gameData.players.map(p => {
+      const participant = match.info.participants.find(mp => mp.puuid === p.puuid);
+      return participant?.teamId;
+    }).filter(Boolean);
+    return teamIds.length > 0 && teamIds.every(t => t === teamIds[0]);
+  })();
+
+  const gameReview = await generateGameReview({
+    players: reviewPlayers,
+    win: squadWon,
+    duration,
+    sameTeam: allSameTeam,
+  });
+
   // Update squad streak
   const userIds = gameData.players.map(p => p.userId);
   const squadResult = updateSquadStreak(guildId, userIds, squadWon);
 
   let description = `**${resultLabel}**\n\n${lines.join('\n')}\n\n⏱️ ${duration} minutes`;
+
+  // Append AI game review if available
+  if (gameReview) {
+    description += `\n\n📋 **Post-Game Analysis**\n${gameReview}`;
+  }
 
   // Add squad streak info on loss
   if (!squadWon && squadResult.streak >= 2) {
