@@ -58,7 +58,11 @@ async function generateGameReview({ players, win, duration, sameTeam }) {
       ? 'All tracked players were on the same team.'
       : 'Tracked players were on opposite teams.';
 
-    const userPrompt = `Result: ${win ? 'VICTORY' : 'DEFEAT'}
+    const resultLine = sameTeam
+      ? `Result: ${win ? 'VICTORY' : 'DEFEAT'}`
+      : 'Result: MIXED (players were on opposite teams — one side won, one lost)';
+
+    const userPrompt = `${resultLine}
 Duration: ${duration} minutes
 ${teamContext}
 
